@@ -785,6 +785,24 @@ elif st.session_state.page == 'portfolio':
         portfolio_df, status_msg = load_portfolio()
         st.info(status_msg)
         st.dataframe(portfolio_df, use_container_width=True)
+
+        # ← AQUÍ: añades esto (debajo de st.dataframe)
+        st.markdown("---")
+        
+        # Calcular totales
+        costo_total_pagado = sum([float(row['Costo Total Pagado'].replace('$', '').replace(',', '')) for _, row in portfolio_df.iterrows()])
+        valor_actual_portfolio = sum([float(row['Valor Actual de Mercado'].replace('$', '').replace(',', '')) for _, row in portfolio_df.iterrows()])
+        perdida_ganancia = valor_actual_portfolio - costo_total_pagado
+        
+        # Mostrar métricas
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Importe Total Pagado", f"${costo_total_pagado:,.2f}")
+        with col2:
+            st.metric("Valor Actual Portfolio", f"${valor_actual_portfolio:,.2f}")
+        with col3:
+            color = "inverse" if perdida_ganancia >= 0 else "off"
+            st.metric("Pérdida/Ganancia", f"${perdida_ganancia:,.2f}", delta=f"{((perdida_ganancia/costo_total_pagado)*100):.2f}%" if costo_total_pagado > 0 else "0%", delta_color=color)
         
         # Mostrar gráficas si hay datos
         if not portfolio_df.empty and len(portfolio_df) > 0:
