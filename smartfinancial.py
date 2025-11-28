@@ -800,11 +800,6 @@ elif st.session_state.page == 'portfolio':
                     st.area_chart(chart_data)
     
     with tab2:
-        st.markdown("#### Añadir Nuevo Valor a Portfolio")
-        
-        # Opción 1: Listado por mercado
-        st.markdown("##### 📊 Opción 1: Seleccionar de Listado de Mercado")
-        
         selected_market = st.selectbox(
             "Elige un mercado bursátil",
             options=list(MARKETS_DATA.keys()),
@@ -904,9 +899,7 @@ elif st.session_state.page == 'portfolio':
         st.markdown("---")
         
     
-    with tab3:
-        st.markdown("#### Eliminar Valor del Portfolio")
-        
+    with tab3:        
         # Obtener lista de tickers del usuario
         portfolio_df, _ = load_portfolio()
         
