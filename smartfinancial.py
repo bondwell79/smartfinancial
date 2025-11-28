@@ -166,19 +166,19 @@ def load_portfolio():
         if len(tickers) == 1:
             ticker = tickers[0]
             if not yf_data.empty and 'Close' in yf_data:
-                current_prices[ticker] = yf_data['Close'].iloc[-1] 
+                current_prices[ticker] = yf_data['Close'].iloc[-1]
                 average_prices[ticker] = yf_data['Close'].mean()
             else:
-                current_prices[ticker] = None
-                average_prices[ticker] = None
+                current_prices[ticker] = yf_data['regularMarketPreviousClose'].iloc[-1]
+                average_prices[ticker] = yf_data['regularMarketPreviousClose'].mean()
         else:
             for ticker in tickers:
                 try:
                     current_prices[ticker] = yf_data['Close'][ticker].iloc[-1]
                     average_prices[ticker] = yf_data['Close'][ticker].mean()
                 except KeyError:
-                    current_prices[ticker] = None
-                    average_prices[ticker] = None
+                    current_prices[ticker] = yf_data['regularMarketPreviousClose'][ticker].iloc[-1]
+                    average_prices[ticker] = yf_data['regularMarketPreviousClose'][ticker].mean()
 
         # Construir los resultados
         results = []
