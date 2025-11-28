@@ -881,9 +881,9 @@ elif st.session_state.page == 'portfolio':
                     # Usar el precio actual de la acción como sugerencia
                     if selected_ticker:
                         selected_stock = next((s for s in st.session_state.current_market_data if s['ticker'] == selected_ticker), None)
-                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=0, step=0.01, key="market_price")
+                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=0.01, step=0.01, key="market_price")
                     else:
-                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=0, step=0.01, key="market_price_default")
+                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=0.01, step=0.01, key="market_price_default")
                 
                 if st.button("➕ Añadir a Portfolio desde Mercado", key="add_from_market_btn"):
                     if selected_ticker and market_shares > 0 and market_price > 0:
