@@ -714,9 +714,16 @@ def prepare_chart_data(df_portfolio):
         chart_data = []
         for idx, row in df_portfolio.iterrows():
             ticker = row['Valor']
-            # Convertir strings de precio a floats (ej: "$1,234.56" -> 1234.56)
+            # Convertir strings de precio a floats
             market_value = float(row['Valor Actual de Mercado'].replace('$', '').replace(',', ''))
-            chart_data.append({'Ticker': ticker, 'Valor Mercado': market_value})
+            cost_value = float(row['Costo Total Pagado'].replace('$', '').replace(',', ''))
+            ganancia = market_value - cost_value
+            
+            chart_data.append({
+                'Ticker': ticker, 
+                'Valor Mercado': market_value,
+                'Ganancia': ganancia
+            })
         
         return pd.DataFrame(chart_data).set_index('Ticker')
     except Exception as e:
@@ -815,7 +822,7 @@ elif st.session_state.page == 'portfolio':
                 with col1:
                     st.bar_chart(chart_data)
                 with col2:
-                    st.area_chart(chart_data)
+                    st.line_chart(chart_data[['Ganancia']])
     
     with tab2:
         selected_market = st.selectbox(
