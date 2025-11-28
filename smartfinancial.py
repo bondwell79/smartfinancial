@@ -168,17 +168,23 @@ def load_portfolio():
             if not yf_data.empty and 'Close' in yf_data:
                 current_prices[ticker] = yf_data['Close'].iloc[-1]
                 average_prices[ticker] = yf_data['Close'].mean()
+                print(f"DEBUG 1: Ticker {ticker} - Current Price: {current_prices[ticker]}, Average Price: {average_prices[ticker]}")
             else:
-                current_prices[ticker] = yf_data['regularMarketPreviousClose'].iloc[-1]
-                average_prices[ticker] = yf_data['regularMarketPreviousClose'].mean()
+                current_prices[ticker] = 0
+                average_prices[ticker] = 0
+                print(f"DEBUG 2: Ticker {ticker} - Current Price: {current_prices[ticker]}, Average Price: {average_prices[ticker]}")
         else:
             for ticker in tickers:
                 try:
                     current_prices[ticker] = yf_data['Close'][ticker].iloc[-1]
+                    if pd.isna(current_prices[ticker]):
+                        current_prices[ticker] = yf_data['Adj Close'][ticker].iloc[-1]
                     average_prices[ticker] = yf_data['Close'][ticker].mean()
+                    print(f"DEBUG 3: Ticker {ticker} - Current Price: {current_prices[ticker]}, Average Price: {average_prices[ticker]}")
                 except KeyError:
-                    current_prices[ticker] = yf_data['regularMarketPreviousClose'][ticker].iloc[-1]
-                    average_prices[ticker] = yf_data['regularMarketPreviousClose'][ticker].mean()
+                    current_prices[ticker] = 0
+                    average_prices[ticker] = 0
+                    print(f"DEBUG 4: Ticker {ticker} - Current Price: {current_prices[ticker]}, Average Price: {average_prices[ticker]}")
 
         # Construir los resultados
         results = []
