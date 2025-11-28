@@ -112,9 +112,9 @@ def calculate_recommendation(avg_price_market, current_price):
     """Calcula la recomendación basada en el precio actual vs. promedio de 3 meses."""
     if current_price is None or avg_price_market is None:
         return "N/D"
-    if current_price < avg_price_market:
+    if current_price < avg_price_market*0.75:
         return "🟢 COMPRAR" 
-    elif current_price > avg_price_market:
+    elif current_price > avg_price_market*1.25:
         return "🔴 VENDER"  
     else:
         return "🟡 MANTENER"
@@ -157,7 +157,7 @@ def load_portfolio():
         end_date = datetime.now()
         start_date = end_date - timedelta(days=90) 
         yf_data = yf.download(tickers, start=start_date.strftime('%Y-%m-%d'), 
-                              end=end_date.strftime('%Y-%m-%d'), progress=False, threads=True)
+                              end=end_date.strftime('%Y-%m-%d'), progress=False, threads=True,auto_adjust=False)
         
         current_prices = {}
         average_prices = {}
@@ -166,8 +166,10 @@ def load_portfolio():
         if len(tickers) == 1:
             ticker = tickers[0]
             if not yf_data.empty and 'Close' in yf_data:
-                current_prices[ticker] = yf_data['Close'].iloc[-1]
-                average_prices[ticker] = yf_data['Close'].mean()
+                tickerp = yf.Ticker(ticker)
+                precio_actual = tickerp.history(period="1d")["Close"].iloc[-1]
+                current_prices[ticker] = precio_actual
+                average_prices[ticker] = float(yf_data['Close'].mean())
                 print(f"DEBUG 1: Ticker {ticker} - Current Price: {current_prices[ticker]}, Average Price: {average_prices[ticker]}")
             else:
                 current_prices[ticker] = 0
@@ -176,10 +178,10 @@ def load_portfolio():
         else:
             for ticker in tickers:
                 try:
-                    current_prices[ticker] = yf_data['Close'][ticker].iloc[-1]
-                    if pd.isna(current_prices[ticker]):
-                        current_prices[ticker] = yf_data['Adj Close'][ticker].iloc[-1]
-                    average_prices[ticker] = yf_data['Close'][ticker].mean()
+                    tickerp = yf.Ticker(ticker)
+                    precio_actual = tickerp.history(period="1d")["Close"].iloc[-1]
+                    current_prices[ticker] = precio_actual
+                    average_prices[ticker] = float(yf_data['Close'][ticker].mean())
                     print(f"DEBUG 3: Ticker {ticker} - Current Price: {current_prices[ticker]}, Average Price: {average_prices[ticker]}")
                 except KeyError:
                     current_prices[ticker] = 0
@@ -884,10 +886,9 @@ elif st.session_state.page == 'portfolio':
                     # Usar el precio actual de la acción como sugerencia
                     if selected_ticker:
                         selected_stock = next((s for s in st.session_state.current_market_data if s['ticker'] == selected_ticker), None)
-                        suggested_price = selected_stock['current_price'] if selected_stock else 0
-                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=float(suggested_price), step=0.01, key="market_price")
+                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=0, step=0.01, key="market_price")
                     else:
-                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=100.0, step=0.01, key="market_price_default")
+                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=0, step=0.01, key="market_price_default")
                 
                 if st.button("➕ Añadir a Portfolio desde Mercado", key="add_from_market_btn"):
                     if selected_ticker and market_shares > 0 and market_price > 0:
@@ -922,7 +923,10 @@ elif st.session_state.page == 'portfolio':
             if delete_ticker:
                 ticker_info = portfolio_df[portfolio_df['Valor'] == delete_ticker]
                 if not ticker_info.empty:
-                    st.info(f"**{delete_ticker}** - Acciones: {ticker_info['Acciones'].values[0]} | Valor Mercado: {ticker_info['Valor Actual de Mercado'].values[0]}")
+                    try:
+                        st.info(f"**{delete_ticker}** - Acciones: {ticker_info['Acciones'].values[0]} | Valor Mercado: {ticker_info['Valor Actual de Mercado'].values[0]}")
+                    except Exception:
+                        st.info(f"**{delete_ticker}** - Acciones: {ticker_info['Acciones'].values[0]}")
             
             col1, col2 = st.columns([1, 1])
             with col1:
