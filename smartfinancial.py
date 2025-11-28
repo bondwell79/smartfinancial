@@ -846,17 +846,40 @@ elif st.session_state.page == 'portfolio':
                 # Crear tabla con datos formateados
                 display_data = []
                 for stock in st.session_state.current_market_data:
+                    # Valores numéricos (pueden ser None)
+                    current_price = stock.get('current_price')
+                    price_3m_max = stock.get('price_3m_max')
+                    price_6m_max = stock.get('price_6m_max')
+                    price_1y_max = stock.get('price_1y_max')
+                    price_3m_min = stock.get('price_3m_min')
+                    price_6m_min = stock.get('price_6m_min')
+                    price_1y_min = stock.get('price_1y_min')
+
+                    # Lógica Compra a Corto: SÍ si precio actual < máx 3M o < máx 6M
+                    compra_corto = False
+                    if current_price is not None:
+                        if (price_3m_max is not None and current_price < (price_3m_min+price_3m_max)/2) or (price_6m_max is not None and current_price < (price_6m_min+price_6m_max)/2):
+                            compra_corto = True
+
+                    # Lógica Compra a Largo: SÍ si precio actual < máx 1A
+                    compra_largo = False
+                    if current_price is not None and price_1y_max is not None and current_price < (price_1y_min+price_1y_max)/2:
+                        compra_largo = True
+
                     display_data.append({
                         'Ticker': stock['ticker'],
                         'Nombre': stock['name'][:40],  # Limitar longitud
-                        'Precio Actual': format_price(stock['current_price']),
+                        'Precio Actual': format_price(current_price),
                         'Promedio 3M': format_price(stock.get('price_3m_avg')),
-                        'Mín. 3M': format_price(stock.get('price_3m_min')),
-                        'Máx. 3M': format_price(stock.get('price_3m_max')),
-                        'Mín. 6M': format_price(stock.get('price_6m_min')),
-                        'Máx. 6M': format_price(stock.get('price_6m_max')),
-                        'Mín. 1A': format_price(stock.get('price_1y_min')),
-                        'Máx. 1A': format_price(stock.get('price_1y_max'))
+                        'Mín. 3M': format_price(price_3m_min),
+                        'Máx. 3M': format_price(price_3m_max),
+                        'Mín. 6M': format_price(price_6m_min),
+                        'Máx. 6M': format_price(price_6m_max),
+                        'Mín. 1A': format_price(price_1y_min),
+                        'Máx. 1A': format_price(price_1y_max),
+                        # Mostrar con emojis: verde para SÍ, rojo para NO
+                        'CC': "🟢SÍ" if compra_corto else "🔴NO",
+                        'CL': "🟢SÍ" if compra_largo else "🔴NO"
                     })
                 
                 df_display = pd.DataFrame(display_data)
