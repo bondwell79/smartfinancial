@@ -5,6 +5,8 @@ import sqlite3
 import bcrypt
 import time
 from datetime import datetime, timedelta
+import requests
+from bs4 import BeautifulSoup
 
 # --- 1. CONFIGURACIÓN Y BASE DE DATOS ---
 DB_NAME = 'smartfinancial.db'
@@ -281,6 +283,419 @@ def delete_from_portfolio(ticker):
     except Exception as e:
         return False, f"❌ Error al eliminar valor: {e}"
 
+# --- 5. FUNCIONES PARA MERCADOS Y LISTADOS DE ACCIONES ---
+
+# Base de datos de mercados con sus índices
+MARKETS_DATA = {
+    "IBEX 35 (Madrid)": {
+        "suffix": ".MC",
+        "index": "^IBEX"
+    },
+    "CAC 40 (París)": {
+        "suffix": ".PA",
+        "index": "^FCHI"
+    },
+    "DAX (Alemania)": {
+        "suffix": ".DE",
+        "index": "^GDAXI"
+    },
+    "FTSE 100 (Londres)": {
+        "suffix": ".L",
+        "index": "^FTSE"
+    },
+    "S&P 500 (USA)": {
+        "suffix": "",
+        "index": "^GSPC"
+    },
+    "NASDAQ (USA Tech)": {
+        "suffix": "",
+        "index": "^IXIC"
+    },
+    "Nikkei 225 (Tokio)": {
+        "suffix": ".T",
+        "index": "^N225"
+    },
+    "SSE (Shanghái)": {
+        "suffix": ".SS",
+        "index": "000001.SS"
+    }
+}
+
+def get_stock_data_for_market(market_name):
+    """Obtiene datos de precios y estadísticas para todas las acciones de un mercado."""
+    market_info = MARKETS_DATA.get(market_name)
+    if not market_info:
+        return None, "❌ Mercado no encontrado."
+    
+    suffix = market_info.get("suffix", "")
+    index_ticker = market_info.get("index", "")
+    
+    try:
+        # Obtener el índice principal para extraer sus componentes
+        st.info(f"⏳ Descargando lista de acciones del mercado {market_name}...")
+        
+        # Obtener datos históricos del índice
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=1)
+        
+        # Descargar el índice para verificar que existe
+        index_data = yf.download(index_ticker, start=start_date.strftime('%Y-%m-%d'), 
+                                end=end_date.strftime('%Y-%m-%d'), progress=False, threads=False)
+        
+        # Obtener información del índice para acceder a sus componentes
+        index_obj = yf.Ticker(index_ticker)
+        
+        # Intentar obtener componentes del índice (varían según la fuente)
+        # Para cada mercado, obtener la lista de componentes disponible
+        tickers = []
+        
+        if market_name == "IBEX 35 (Madrid)":
+            # Componentes del IBEX 35 - Lista completa actualizada
+            tickers = ["ACS","ACX","AMS","ANA","ANE","BBVA","BKT","CABK",
+                        "CLNX","COL","AENA","ELE","ENG","FDR","FER","GRF","IAG","IBE","IDR","ITX","LOG","MAP","MRL","MTS",
+                        "NTGY","PUIG","RED","REP","ROVI","SAB",
+                        "SAN","SCYR","SLR","TEF","UNI"]
+        elif market_name == "CAC 40 (París)":
+            tickers = ["OR", "CS", "AIR", "CA", "DPT", "EI", "FP", "GLE", "HO",
+                      "KER", "LMT", "MC", "MIC", "ML", "MR", "MT", "NWL", "ORA",
+                      "RI", "SAF", "SGO", "STM", "SU", "SW", "URW", "VIE", "WFT", "BN", "CDI", "EN"]
+        elif market_name == "DAX (Alemania)":
+            tickers = ["SAP", "SIE", "ADS", "BMW", "BAS", "BAY", "BEI", "CON",
+                      "DAI", "DBK", "EXE", "FRE", "HEI", "HNR", "IFX", "LIN",
+                      "MRK", "MUV2", "RWE", "VOW3", "ZAL", "ZIM", "VNA", "LHA", "RXO", "QIA", "PUM"]
+        elif market_name == "FTSE 100 (Londres)":
+            tickers = ["LLOY", "HSBA", "BARB", "GLEN", "RB", "AZN", "GSK", "ULVR",
+                      "BP", "SHEL", "PPHM", "SMDS", "CRH", "RIO", "STAN",
+                      "EVR", "REL", "KGF", "ICP", "LGEN", "BARC", "NWG", "PSH", "PNN", "SVT", "EXPN"]
+        elif market_name == "S&P 500 (USA)":
+            # Los 500 componentes del S&P 500 - aquí incluimos una lista representativa
+            # En producción, se podría usar una API de SP Global o una fuente más completa
+            tickers = ["AAPL", "MSFT", "GOOGL", "GOOG", "AMZN", "NVDA", "META", "TSLA", "BRK.B",
+                      "JPM", "JNJ", "V", "WMT", "XOM", "CVX", "MCD", "KO", "DIS", "BA", "GE",
+                      "INTC", "AMD", "IBM", "CSCO", "ORCL", "CRM", "NFLX", "PYPL", "ADBE", "QCOM",
+                      "MU", "AVGO", "TXN", "TSM", "ASML", "NOW", "INTU", "AMAT", "LRCX", "CDNS",
+                      "SNPS", "ACN", "ADSK", "ADP", "ANSS", "APPF", "ASNA", "BAND", "BLDR", "BRKS",
+                      "BX", "CACI", "CAL", "CASS", "CBPO", "CBSH", "CDAY", "CDW", "CFRT", "CHGG"]
+        elif market_name == "NASDAQ (USA Tech)":
+            tickers = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "GOOG", "META", "TSLA", "ASML",
+                      "ADA", "AVGO", "CDNS", "CMCSA", "COST", "CTAS", "CSCO", "CRWD",
+                      "FANG", "JBLU", "NFLX", "PYPL", "QCOM", "ROKU", "SNPS", "VRSK", "AMD", "INTC",
+                      "AMAT", "LRCX", "MU", "MCHP", "MRVL", "NXPI", "ON", "PANW", "PD", "PLTR",
+                      "PSTG", "SSNC", "STX", "STWD", "SWKS", "TCOM", "TEAM", "TEVA", "TKLF", "TLRY"]
+        elif market_name == "Nikkei 225 (Tokio)":
+            tickers = ["6758", "8306", "9984", "7203", "6861", "8031", "9433", "4503",
+                      "4522", "5108", "8058", "9201", "9202", "6504", "8035", "9062",
+                      "5411", "7267", "2768", "6273", "9605", "7211", "3405", "5201", "8604"]
+        elif market_name == "SSE (Shanghái)":
+            tickers = ["600000", "600004", "600008", "600009", "600010", "600011",
+                      "600012", "600015", "600016", "600017", "600018", "600019",
+                      "600020", "600021", "600022", "600023", "600028", "600030", "600031", "600033",
+                      "600035", "600036", "600037", "600038", "600039", "600048", "600050"]
+        
+        # Agregar suffix a los tickers
+        full_tickers = [f"{ticker}{suffix}" for ticker in tickers if ticker]
+        
+        if not full_tickers:
+            return None, "❌ No se encontraron acciones para este mercado."
+        
+        # Descargar datos para los últimos períodos
+        end_date = datetime.now()
+        start_date_1y = end_date - timedelta(days=365)
+        start_date_6m = end_date - timedelta(days=180)
+        start_date_3m = end_date - timedelta(days=90)
+        
+        # Descargar datos de 1 año para todo (en batches si hay muchos)
+        batch_size = 20
+        stock_list = []
+        failed_tickers = []
+        
+        for batch_idx in range(0, len(full_tickers), batch_size):
+            batch_tickers = full_tickers[batch_idx:batch_idx + batch_size]
+            
+            try:
+                yf_data_1y = yf.download(batch_tickers, start=start_date_1y.strftime('%Y-%m-%d'), 
+                                        end=end_date.strftime('%Y-%m-%d'), progress=False, threads=True)
+                
+                # Procesar cada ticker en el batch
+                for ticker in batch_tickers:
+                    try:
+                        # Obtener datos históricos
+                        if len(batch_tickers) == 1:
+                            historical_data = yf_data_1y
+                        else:
+                            if ticker not in yf_data_1y['Close'].columns:
+                                failed_tickers.append((ticker, "Sin datos históricos en yfinance"))
+                                continue
+                            historical_data = yf_data_1y['Close'][ticker]
+                        
+                        if historical_data is None or (hasattr(historical_data, 'empty') and historical_data.empty) or len(historical_data) == 0:
+                            failed_tickers.append((ticker, "Datos históricos vacíos"))
+                            continue
+                        
+                        # Obtener información de la acción
+                        stock = yf.Ticker(ticker)
+                        info = stock.info
+                        
+                        # Precios actuales
+                        current_price = info.get('currentPrice') or info.get('regularMarketPrice')
+                        
+                        # Si no tenemos precio actual de yfinance, usamos el último cierre
+                        if not current_price:
+                            if len(batch_tickers) == 1:
+                                current_price = yf_data_1y['Close'].iloc[-1] if not yf_data_1y.empty else None
+                            else:
+                                if ticker in yf_data_1y['Close'].columns:
+                                    current_price = yf_data_1y['Close'][ticker].iloc[-1] if len(yf_data_1y['Close'][ticker]) > 0 else None
+                        
+                        if not current_price:
+                            failed_tickers.append((ticker, "No hay precio actual disponible"))
+                            continue
+                        
+                        # Calcular precios para diferentes períodos
+                        stock_data_item = {
+                            'ticker': ticker,
+                            'name': info.get('longName', ticker),
+                            'current_price': current_price
+                        }
+                        
+                        # Procesar data por períodos
+                        if len(batch_tickers) == 1:
+                            data = yf_data_1y
+                        else:
+                            if ticker in yf_data_1y['Close'].columns:
+                                data = yf_data_1y['Close'][ticker]
+                            else:
+                                failed_tickers.append((ticker, "No hay datos en el batch"))
+                                continue
+                        
+                        # Último año
+                        if len(data) > 0:
+                            stock_data_item['price_1y_avg'] = data.mean()
+                            stock_data_item['price_1y_min'] = data.min()
+                            stock_data_item['price_1y_max'] = data.max()
+                        else:
+                            stock_data_item['price_1y_avg'] = stock_data_item['price_1y_min'] = stock_data_item['price_1y_max'] = None
+                        
+                        # Últimos 6 meses
+                        data_6m = data[data.index >= start_date_6m]
+                        if len(data_6m) > 0:
+                            stock_data_item['price_6m_min'] = data_6m.min()
+                            stock_data_item['price_6m_max'] = data_6m.max()
+                        else:
+                            stock_data_item['price_6m_min'] = stock_data_item['price_6m_max'] = None
+                        
+                        # Últimos 3 meses
+                        data_3m = data[data.index >= start_date_3m]
+                        if len(data_3m) > 0:
+                            stock_data_item['price_3m_avg'] = data_3m.mean()
+                            stock_data_item['price_3m_min'] = data_3m.min()
+                            stock_data_item['price_3m_max'] = data_3m.max()
+                        else:
+                            stock_data_item['price_3m_avg'] = stock_data_item['price_3m_min'] = stock_data_item['price_3m_max'] = None
+                        
+                        stock_list.append(stock_data_item)
+                    
+                    except Exception as e:
+                        failed_tickers.append((ticker, str(e)[:50]))
+                        continue
+            
+            except Exception as e:
+                for ticker in batch_tickers:
+                    failed_tickers.append((ticker, f"Error en batch: {str(e)[:40]}"))
+                continue
+        
+        if not stock_list:
+            return None, "❌ No se pudieron obtener datos para este mercado."
+        
+        # Crear mensaje con información de acciones no encontradas
+        message = f"✅ {len(stock_list)} acciones cargadas"
+        if failed_tickers:
+            message += f" ({len(failed_tickers)} no disponibles)"
+        message += "."
+        
+        # Guardar info de tickers fallidos en session_state para mostrar después
+        st.session_state.failed_tickers_info = {
+            'market': market_name,
+            'failed': failed_tickers
+        }
+        
+        return stock_list, message
+    
+    except Exception as e:
+        return None, f"❌ Error al cargar datos del mercado: {e}"
+
+def format_price(price):
+    """Formatea un precio para mostrar en la tabla."""
+    if price is None:
+        return "N/D"
+    return f"${price:,.2f}"
+
+def get_ticketnamesmarket(nombre_mercado):
+    """
+    Obtiene los nombres de tickers de servicios públicos online para un mercado específico.
+    
+    Parámetros:
+    -----------
+    nombre_mercado : str
+        Nombre del mercado (ej: "IBEX 35 (Madrid)", "CAC 40 (París)", etc.)
+    
+    Retorna:
+    --------
+    list
+        Lista de tickers (denominaciones clásicas) del mercado
+    
+    Nota: La función intenta obtener datos de múltiples fuentes:
+    1. Wikipedia (para componentes del índice)
+    2. Yahoo Finance (para datos del índice)
+    3. Bases de datos predefinidas como fallback
+    """
+    
+    try:
+        # Mapeo de mercados a URLs de Wikipedia con componentes
+        wikipedia_urls = {
+            "IBEX 35 (Madrid)": "https://en.wikipedia.org/wiki/IBEX_35",
+            "CAC 40 (París)": "https://en.wikipedia.org/wiki/CAC_40",
+            "DAX (Alemania)": "https://en.wikipedia.org/wiki/DAX",
+            "FTSE 100 (Londres)": "https://en.wikipedia.org/wiki/FTSE_100_Index",
+            "S&P 500 (USA)": "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies",
+            "NASDAQ (USA Tech)": "https://en.wikipedia.org/wiki/NASDAQ-100",
+            "Nikkei 225 (Tokio)": "https://en.wikipedia.org/wiki/Nikkei_225",
+            "SSE (Shanghái)": "https://en.wikipedia.org/wiki/Shanghai_Stock_Exchange"
+        }
+        
+        tickers_list = []
+        
+        if nombre_mercado not in wikipedia_urls:
+            return []
+        
+        url = wikipedia_urls[nombre_mercado]
+        
+        # Realizar petición a Wikipedia
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+        
+        response = requests.get(url, headers=headers, timeout=10)
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.content, 'html.parser')
+        
+        # Estrategias de extracción según el mercado
+        if nombre_mercado == "IBEX 35 (Madrid)":
+            # Buscar la tabla con los componentes del IBEX 35
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:  # Saltar encabezados
+                    cells = row.find_all('td')
+                    if len(cells) > 1:
+                        ticker = cells[1].text.strip()
+                        if ticker and len(ticker) <= 6:  # Los tickers tienen máximo 6 caracteres
+                            tickers_list.append(ticker)
+        
+        elif nombre_mercado == "CAC 40 (París)":
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:
+                    cells = row.find_all('td')
+                    if len(cells) > 0:
+                        ticker = cells[0].text.strip()
+                        if ticker and len(ticker) <= 6 and ticker.isalpha():
+                            tickers_list.append(ticker)
+        
+        elif nombre_mercado == "DAX (Alemania)":
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:
+                    cells = row.find_all('td')
+                    if len(cells) > 1:
+                        ticker = cells[1].text.strip()
+                        if ticker and len(ticker) <= 6 and ticker.isalpha():
+                            tickers_list.append(ticker)
+        
+        elif nombre_mercado == "FTSE 100 (Londres)":
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:
+                    cells = row.find_all('td')
+                    if len(cells) > 0:
+                        ticker = cells[0].text.strip()
+                        if ticker and len(ticker) <= 6:
+                            tickers_list.append(ticker)
+        
+        elif nombre_mercado == "S&P 500 (USA)":
+            # Para S&P 500, buscar tabla de constituents
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            if tables:
+                table = tables[0]
+                rows = table.find_all('tr')
+                for row in rows[1:]:
+                    cells = row.find_all('td')
+                    if len(cells) > 0:
+                        ticker = cells[0].text.strip()
+                        if ticker and len(ticker) <= 5 and ticker.isalpha():
+                            tickers_list.append(ticker)
+        
+        elif nombre_mercado == "NASDAQ (USA Tech)":
+            # Buscar tabla con componentes del NASDAQ-100
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:
+                    cells = row.find_all('td')
+                    if len(cells) > 0:
+                        ticker = cells[0].text.strip()
+                        if ticker and len(ticker) <= 5 and ticker.isalpha():
+                            tickers_list.append(ticker)
+        
+        elif nombre_mercado == "Nikkei 225 (Tokio)":
+            # Para Nikkei, extraer códigos numéricos
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:
+                    cells = row.find_all('td')
+                    if len(cells) > 0:
+                        code = cells[0].text.strip()
+                        # Los códigos del Nikkei son numéricos (4-5 dígitos)
+                        if code and code.isdigit() and len(code) <= 5:
+                            tickers_list.append(code)
+        
+        elif nombre_mercado == "SSE (Shanghái)":
+            # Para SSE, extraer códigos de acciones chinas
+            tables = soup.find_all('table', {'class': 'wikitable'})
+            for table in tables:
+                rows = table.find_all('tr')
+                for row in rows[1:]:
+                    cells = row.find_all('td')
+                    if len(cells) > 0:
+                        code = cells[0].text.strip()
+                        # Los códigos de SSE son numéricos (6 dígitos)
+                        if code and code.isdigit() and len(code) == 6:
+                            tickers_list.append(code)
+        
+        # Eliminar duplicados y ordenar
+        tickers_list = sorted(list(set(tickers_list)))
+        
+        # Si se obtuvieron tickers, retornarlos
+        if tickers_list:
+            return tickers_list
+        
+        # Fallback: retornar lista vacía si no se pudo scrapear
+        return []
+    
+    except requests.exceptions.Timeout:
+        # Si timeout, retornar lista vacía
+        return []
+    except requests.exceptions.ConnectionError:
+        # Si error de conexión, retornar lista vacía
+        return []
+    except Exception as e:
+        # Para cualquier otro error, retornar lista vacía
+        return []
+
 def prepare_chart_data(df_portfolio):
     """Prepara datos para gráficas a partir del dataframe del portfolio."""
     if df_portfolio.empty:
@@ -303,6 +718,7 @@ def prepare_chart_data(df_portfolio):
 # --- 5. INTERFAZ DE STREAMLIT ---
 
 st.markdown("## 🔒 SmartFinancial: Gestión de Portfolio Personal")
+st.markdown("Aviso: versión experimental para gestión básica de portfolios. Usa con precaución.")
 
 # Pantalla de LOGIN / REGISTRO
 if st.session_state.page == 'login':
@@ -378,24 +794,108 @@ elif st.session_state.page == 'portfolio':
     with tab2:
         st.markdown("#### Añadir Nuevo Valor a Portfolio")
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            add_ticker = st.text_input("Símbolo Bursátil (Ticker)", placeholder="Ej: AAPL", key="add_ticker")
-        with col2:
-            add_shares = st.text_input("Número de Acciones", placeholder="Ej: 10", key="add_shares")
-        with col3:
-            add_price = st.text_input("Precio de Compra por Acción", placeholder="Ej: 150.75", key="add_price")
+        # Opción 1: Listado por mercado
+        st.markdown("##### 📊 Opción 1: Seleccionar de Listado de Mercado")
         
-        if st.button("➕ Añadir a Portfolio", key="add_btn"):
-            if add_ticker and add_shares and add_price:
-                success, message = add_to_portfolio(add_ticker, add_shares, add_price)
-                if success:
-                    st.success(message)
-                    st.rerun()
-                else:
-                    st.error(message)
-            else:
-                st.error("❌ Por favor completa todos los campos.")
+        selected_market = st.selectbox(
+            "Elige un mercado bursátil",
+            options=list(MARKETS_DATA.keys()),
+            key="market_select"
+        )
+        
+        if selected_market:
+            if st.button("📈 Cargar Acciones del Mercado", key="load_market_btn"):
+                with st.spinner(f"Cargando acciones de {selected_market}..."):
+                    stock_list, load_message = get_stock_data_for_market(selected_market)
+                    st.session_state.current_market_data = stock_list
+                    st.session_state.current_market_name = selected_market
+                    st.info(load_message)
+            
+            # Mostrar listado de acciones si están disponibles
+            if 'current_market_data' in st.session_state and st.session_state.current_market_data:
+                st.markdown(f"**Acciones disponibles en {st.session_state.current_market_name}:**")
+                
+                # Crear tabla con datos formateados
+                display_data = []
+                for stock in st.session_state.current_market_data:
+                    display_data.append({
+                        'Ticker': stock['ticker'],
+                        'Nombre': stock['name'][:40],  # Limitar longitud
+                        'Precio Actual': format_price(stock['current_price']),
+                        'Promedio 3M': format_price(stock.get('price_3m_avg')),
+                        'Mín. 3M': format_price(stock.get('price_3m_min')),
+                        'Máx. 3M': format_price(stock.get('price_3m_max')),
+                        'Mín. 6M': format_price(stock.get('price_6m_min')),
+                        'Máx. 6M': format_price(stock.get('price_6m_max')),
+                        'Mín. 1A': format_price(stock.get('price_1y_min')),
+                        'Máx. 1A': format_price(stock.get('price_1y_max'))
+                    })
+                
+                df_display = pd.DataFrame(display_data)
+                st.dataframe(df_display, use_container_width=True, height=400)
+                
+                # Mostrar información sobre acciones no disponibles
+                if 'failed_tickers_info' in st.session_state and st.session_state.failed_tickers_info['failed']:
+                    with st.expander("ℹ️ Acciones no disponibles"):
+                        st.markdown(f"**{len(st.session_state.failed_tickers_info['failed'])} acciones no se pudieron cargar:**")
+                        failed_df = pd.DataFrame(st.session_state.failed_tickers_info['failed'], columns=['Ticker', 'Motivo'])
+                        st.dataframe(failed_df, use_container_width=True)
+                        st.markdown("**Posibles motivos:**")
+                        st.markdown("""
+                        - **Sin datos históricos en yfinance**: El ticker no existe o no está disponible en yfinance
+                        - **Datos históricos vacíos**: No hay suficientes datos históricos (requiere al menos datos de 1 año)
+                        - **No hay precio actual disponible**: yfinance no pudo obtener el precio actual de la acción
+                        - **Sin datos en el batch**: Error al procesar los datos del mercado
+                        """)
+                
+                st.markdown("---")
+                st.markdown("##### Selecciona una acción para añadir a tu portfolio:")
+                
+                # Selector de acción
+                ticker_options = [stock['ticker'] for stock in st.session_state.current_market_data]
+                selected_ticker = st.selectbox(
+                    "Acción a añadir",
+                    options=ticker_options,
+                    key="market_ticker_select",
+                    format_func=lambda x: f"{x} - {[s['name'] for s in st.session_state.current_market_data if s['ticker'] == x][0][:50]}"
+                )
+                
+                # Información de la acción seleccionada
+                if selected_ticker:
+                    selected_stock = next((s for s in st.session_state.current_market_data if s['ticker'] == selected_ticker), None)
+                    if selected_stock:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Precio Actual", format_price(selected_stock['current_price']))
+                        with col2:
+                            st.metric("Promedio 3 Meses", format_price(selected_stock.get('price_3m_avg')))
+                
+                # Inputs para cantidad y precio
+                col1, col2 = st.columns(2)
+                with col1:
+                    market_shares = st.number_input("Número de Acciones", min_value=1, value=1, step=1, key="market_shares")
+                with col2:
+                    # Usar el precio actual de la acción como sugerencia
+                    if selected_ticker:
+                        selected_stock = next((s for s in st.session_state.current_market_data if s['ticker'] == selected_ticker), None)
+                        suggested_price = selected_stock['current_price'] if selected_stock else 0
+                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=float(suggested_price), step=0.01, key="market_price")
+                    else:
+                        market_price = st.number_input("Precio de Compra por Acción", min_value=0.01, value=100.0, step=0.01, key="market_price_default")
+                
+                if st.button("➕ Añadir a Portfolio desde Mercado", key="add_from_market_btn"):
+                    if selected_ticker and market_shares > 0 and market_price > 0:
+                        success, message = add_to_portfolio(selected_ticker, str(int(market_shares)), str(market_price))
+                        if success:
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(message)
+                    else:
+                        st.error("❌ Por favor completa todos los campos correctamente.")
+        
+        st.markdown("---")
+        
     
     with tab3:
         st.markdown("#### Eliminar Valor del Portfolio")
