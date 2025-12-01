@@ -331,6 +331,10 @@ MARKETS_DATA = {
     "SSE (Shanghái)": {
         "suffix": ".SS",
         "index": "000001.SS"
+    },
+    "Cryptomonedas (USD)": {
+        "suffix": "-USD",
+        "index": ""
     }
 }
 
@@ -351,12 +355,18 @@ def get_stock_data_for_market(market_name):
         end_date = datetime.now()
         start_date = end_date - timedelta(days=1)
         
-        # Descargar el índice para verificar que existe
-        index_data = yf.download(index_ticker, start=start_date.strftime('%Y-%m-%d'), 
-                                end=end_date.strftime('%Y-%m-%d'), progress=False, threads=False)
-        
-        # Obtener información del índice para acceder a sus componentes
-        index_obj = yf.Ticker(index_ticker)
+        # Descargar el índice para verificar que existe (solo si proporcionado)
+        index_data = None
+        index_obj = None
+        if index_ticker:
+            try:
+                index_data = yf.download(index_ticker, start=start_date.strftime('%Y-%m-%d'), 
+                                        end=end_date.strftime('%Y-%m-%d'), progress=False, threads=False)
+                # Obtener información del índice para acceder a sus componentes
+                index_obj = yf.Ticker(index_ticker)
+            except Exception as e:
+                # No es crítico si no se puede descargar el índice; continuar con los tickers definidos
+                st.warning(f"⚠️ No se pudo descargar/consultar el índice {index_ticker}: {e}")
         
         # Intentar obtener componentes del índice (varían según la fuente)
         # Para cada mercado, obtener la lista de componentes disponible
@@ -404,7 +414,12 @@ def get_stock_data_for_market(market_name):
                       "600012", "600015", "600016", "600017", "600018", "600019",
                       "600020", "600021", "600022", "600023", "600028", "600030", "600031", "600033",
                       "600035", "600036", "600037", "600038", "600039", "600048", "600050"]
-        
+        elif market_name == "Cryptomonedas (USD)":
+            # Principales criptomonedas (se les añadirá el sufijo '-USD' definido en MARKETS_DATA)
+            tickers = [
+                "BTC", "ETH", "BNB", "USDT", "USDC", "ADA", "XRP", "SOL",
+                "DOGE", "DOT", "LTC", "AVAX", "MATIC", "LINK", "TRX", "ATOM"
+            ]
         # Agregar suffix a los tickers
         full_tickers = [f"{ticker}{suffix}" for ticker in tickers if ticker]
         
