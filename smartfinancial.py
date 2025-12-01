@@ -211,7 +211,7 @@ def load_portfolio():
             recommendation = calculate_recommendation(avg_price_market, current_price)
             
             results.append({
-                'Titulo': nombre_ticker,
+                'Valor': nombre_ticker,
                 'Ticker': ticker,
                 'Acciones': total_shares,
                 
@@ -718,7 +718,7 @@ def prepare_chart_data(df_portfolio):
         # Extraer valores numéricos de los strings con formato
         chart_data = []
         for idx, row in df_portfolio.iterrows():
-            ticker = row['Valor']
+            ticker = row['Ticker']
             # Convertir strings de precio a floats
             market_value = float(row['Valor Actual de Mercado'].replace('$', '').replace(',', ''))
             cost_value = float(row['Costo Total Pagado'].replace('$', '').replace(',', ''))
