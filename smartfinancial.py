@@ -161,10 +161,12 @@ def load_portfolio():
         
         current_prices = {}
         average_prices = {}
+        nombrelargo = {}
         
         # Lógica para extraer precios y promedios de 3M
         if len(tickers) == 1:
             ticker = tickers[0]
+            nombrelargo[ticker] = yf.Ticker(ticker).info.get('longName', ticker)
             if not yf_data.empty and 'Close' in yf_data:
                 tickerp = yf.Ticker(ticker)
                 precio_actual = tickerp.history(period="1d")["Close"].iloc[-1]
@@ -179,6 +181,7 @@ def load_portfolio():
             for ticker in tickers:
                 try:
                     tickerp = yf.Ticker(ticker)
+                    nombrelargo[ticker] = tickerp.info.get('longName', ticker)
                     precio_actual = tickerp.history(period="1d")["Close"].iloc[-1]
                     current_prices[ticker] = precio_actual
                     average_prices[ticker] = float(yf_data['Close'][ticker].mean())
@@ -197,6 +200,7 @@ def load_portfolio():
             # DATOS DE COMPRA (SQLITE)
             avg_purchase_price = row['avg_purchase_price']
             total_cost_basis = total_shares * avg_purchase_price
+            nombre_ticker = nombrelargo.get(ticker)
 
             # DATOS DE MERCADO (YFINANCE)
             avg_price_market = average_prices.get(ticker) 
@@ -207,7 +211,8 @@ def load_portfolio():
             recommendation = calculate_recommendation(avg_price_market, current_price)
             
             results.append({
-                'Valor': ticker,
+                'Titulo': nombre_ticker,
+                'Ticker': ticker,
                 'Acciones': total_shares,
                 
                 'Precio Compra (Unidad)': f"${avg_purchase_price:,.2f}",
